@@ -14,7 +14,7 @@ test('resolveConfig fills defaults and keeps overrides', () => {
   assert.equal(base.upstreamApiKeyEnv, '')
   assert.equal(base.zenEnabled, true)
   assert.equal(base.zenProviderId, 'opencode2dsh')
-  assert.equal(base.zenBaseUrl, 'https://opencode.ai/zen')
+  assert.equal(base.zenBaseUrl, 'https://opencode.ai/inference')
   assert.equal(base.zenUserAgent, '')
   assert.equal(base.zenApiKeyEnv, '')
   assert.equal(base.zenAnonymousKey, 'public')

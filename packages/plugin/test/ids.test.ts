@@ -3,11 +3,13 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import {
   conversationSeed,
+  currentOpencodeSessionId,
   deriveRequestIDs,
   kiloHeaders,
   kiloUserAgent,
   opencodeHeaders,
   opencodeUserAgent,
+  opencodeV2SessionId,
   randomID,
   stableID,
 } from '../src/adapter/ids.ts'
@@ -77,15 +79,37 @@ test('kiloHeaders carries Kilo correlation headers without CLI spoofing', () => 
   assert.ok(headers['user-agent'].startsWith('kilo2dsh'))
 })
 
-test('opencodeHeaders carries Zen compatibility identifiers independently', () => {
+test('opencodeV2SessionId matches the opencode-free-api-rust format', () => {
+  const id = opencodeV2SessionId(1_762_000_000_000)
+  assert.match(id, /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/, 'ses_ + 12 lowercase hex + 14 base62')
+  // Deterministic for a fixed timestamp (mirrors the Rust LCG seeded from ts).
+  assert.equal(id, opencodeV2SessionId(1_762_000_000_000))
+  assert.notEqual(id, opencodeV2SessionId(1_762_000_000_001), 'a different timestamp yields a different id')
+})
+
+test('currentOpencodeSessionId reuses the same id within the TTL', () => {
+  const first = currentOpencodeSessionId(1_762_000_000_000)
+  const second = currentOpencodeSessionId(1_762_000_000_000 + 60_000)
+  assert.equal(first, second, 'id is cached for 30 minutes')
+  const later = currentOpencodeSessionId(1_762_000_000_000 + 31 * 60_000)
+  assert.notEqual(first, later, 'id is re-rolled after the 30-minute TTL')
+})
+
+test('opencodeHeaders carries Zen V2 compatibility identifiers independently', () => {
   const ids = deriveRequestIDs([{ role: 'user', content: 'hello' }], 'opencode2dsh:default-project')
   const headers = opencodeHeaders(ids)
   assert.equal(headers['user-agent'], opencodeUserAgent())
+  assert.ok(headers['user-agent'].startsWith('opencode/latest/'))
+  assert.ok(headers['user-agent'].endsWith('/cli'))
   assert.equal(headers['x-opencode-client'], 'cli')
-  assert.equal(headers['x-opencode-session'], ids.session)
-  assert.equal(headers['x-session-affinity'], ids.session)
-  assert.equal(headers['X-Session-Id'], ids.session)
+  // The V2 free lane requires a valid V2 session id on these affinity headers;
+  // the legacy sha256 `ids.session` is rejected upstream with FreeTierError.
+  assert.match(headers['x-opencode-session'], /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+  assert.equal(headers['x-opencode-session'], headers['x-opencode-session-id'])
+  assert.equal(headers['x-opencode-session'], headers['x-session-affinity'])
+  assert.equal(headers['x-opencode-session'], headers['X-Session-Id'])
+  assert.notEqual(headers['x-opencode-session'], ids.session, 'V2 id is not the sha256 conversation id')
+  assert.equal(headers['x-opencode-project'], 'global')
   assert.equal(headers['x-opencode-request'], ids.request)
-  assert.equal(headers['x-opencode-project'], ids.project)
   assert.equal(headers['x-kilocode-editorname'], undefined)
 })

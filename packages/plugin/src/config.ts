@@ -45,7 +45,7 @@ export interface Kilo2dshConfig {
   zenEnabled?: boolean
   /** DSH provider route name for OpenCode Zen. */
   zenProviderId?: string
-  /** OpenCode Zen root URL, normally `https://opencode.ai/zen`. */
+  /** OpenCode Zen root URL, normally `https://opencode.ai/inference`. */
   zenBaseUrl?: string
   /** Optional Zen compatibility User-Agent; empty derives the current OpenCode format. */
   zenUserAgent?: string
@@ -73,7 +73,7 @@ export const defaults = {
   maxConsecutiveCrashes: 5,
   zenEnabled: true,
   zenProviderId: 'opencode2dsh',
-  zenBaseUrl: 'https://opencode.ai/zen',
+  zenBaseUrl: 'https://opencode.ai/inference',
   zenUserAgent: '',
   zenApiKeyEnv: '',
   zenAnonymousKey: 'public',

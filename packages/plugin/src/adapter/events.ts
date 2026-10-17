@@ -59,8 +59,21 @@ export interface PiDoneMessage {
 const CONTEXT_WINDOW_EXCEEDED = 'CONTEXT_WINDOW_EXCEEDED'
 const EMPTY_RESPONSE = 'EMPTY_RESPONSE'
 const QUOTA_EXCEEDED = 'QUOTA_EXCEEDED'
+const REGION_ERROR = 'REGION_ERROR'
+const MODEL_PROTOCOL_UNSUPPORTED = 'MODEL_PROTOCOL_UNSUPPORTED'
 
 function classifyError(text: string): string {
+  // OpenCode Zen V2 free-tier gate. The FreeTierError is upstream's
+  // probabilistic node check: roughly half of free requests land on a node
+  // that over-validates and 403's them while the other half succeed — a
+  // transient upstream failure, not a terminal one. Map it to SERVER so
+  // dsh-plugin-auto-retry's default retryable set (which includes SERVER)
+  // picks it up; the retry usually hits a lenient node. RegionError and
+  // ModelProtocolUnsupported are genuinely terminal per-model states, so they
+  // keep their own codes and are not retried.
+  if (/FreeTierError/i.test(text)) return 'SERVER'
+  if (/RegionError/i.test(text)) return REGION_ERROR
+  if (/ModelProtocolUnsupported/i.test(text)) return MODEL_PROTOCOL_UNSUPPORTED
   if (/\b(?:401|403)\b/.test(text)) return 'AUTH'
   if (/insufficient|quota|billing/i.test(text)) return QUOTA_EXCEEDED
   if (/\b429\b|rate.?limit/i.test(text)) return 'RATE_LIMIT'

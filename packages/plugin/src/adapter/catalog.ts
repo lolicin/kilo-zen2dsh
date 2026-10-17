@@ -9,8 +9,14 @@ import { dirname, join } from 'node:path'
 export const KILO_API_BASE_URL = 'https://api.kilo.ai'
 export const KILO_GATEWAY_BASE_URL = `${KILO_API_BASE_URL}/api/gateway`
 export const KILO_MODELS_URL = `${KILO_GATEWAY_BASE_URL}/models`
-/** OpenCode Zen's public OpenAI-compatible API root. */
-export const OPENCODE_ZEN_BASE_URL = 'https://opencode.ai/zen'
+/**
+ * OpenCode Zen's public OpenAI-compatible API root. The V2 free lane moved
+ * from `/zen/v1` to `/inference/v1`; both still serve `/models`, but the
+ * canonical upstream documented by opencode-free-api-rust is `/inference/v1`.
+ * Users may override via config `zenBaseUrl` or the `OPENCODE_ZEN_BASE_URL`
+ * environment variable.
+ */
+export const OPENCODE_ZEN_BASE_URL = process.env.OPENCODE_ZEN_BASE_URL?.trim() || 'https://opencode.ai/inference'
 export const OPENCODE_ZEN_GATEWAY_BASE_URL = `${OPENCODE_ZEN_BASE_URL}/v1`
 export const OPENCODE_ZEN_MODELS_URL = `${OPENCODE_ZEN_GATEWAY_BASE_URL}/models`
 /**
@@ -44,26 +50,29 @@ export const staticFreeModels: string[] = [
 export const staticFreeCandidates: string[] = []
 
 /**
- * OpenCode's documented Zen free models plus the reference project's
- * previously verified `hy3-free` route. The live `/v1/models` response is
- * authoritative; this list is only used while discovery is unavailable.
- * Zen's model endpoint currently returns IDs without pricing/capability data,
- * so the free suffix and the explicit `big-pickle` exception are the safe
- * local signal.
- * Source: https://dev.opencode.ai/docs/zen (free-model pricing/endpoints).
+ * OpenCode Zen's documented free models. The live `/v1/models` response is
+ * authoritative; this list is only used while discovery is unavailable and was
+ * refreshed against the live catalog on 2026-10-17 (9 free ids, of which
+ * `beam-free` is region-gated and `jev-1.13-free` reports
+ * ModelProtocolUnsupported for both `/chat/completions` and `/responses`).
+ * `big-pickle` is retained because it is the documented non-suffixed free
+ * exception even though the current live list hides it behind `:free`.
  */
 export const zenStaticFreeModels: string[] = [
   'big-pickle',
-  'hy3-free',
-  'mimo-v2.5-free',
-  'ling-3.0-flash-fin-free',
-  'nemotron-3-ultra-free',
+  'beam-free',
+  'mimo-v2.6-flash-free',
+  'nemotron-3.5-super-vl-free',
   'nemotron-3.5-lightning-free',
-  'muse-spark-1.2-contributor-free',
+  'jev-1.13-free',
+  'longcat-2.5-preview-free',
+  'deepseek-v4.1-flash-free',
+  'glm-5.3-flash-free',
+  'space-bunny-free',
 ]
 
 /** Reserved for IDs observed in a live Zen catalog but not yet verified locally. */
-export const zenStaticFreeCandidates: string[] = ['deepseek-v4-flash-free', 'laguna-s-2.1-free']
+export const zenStaticFreeCandidates: string[] = []
 
 export interface KiloPricing {
   prompt?: string | number | null
@@ -847,8 +856,10 @@ export function normalizeZenGatewayUrl(value: string): string {
 }
 
 function defaultOpenCodeZenUserAgent(): string {
-  const version = process.env.OPENCODE2DSH_VERSION?.trim() || '1.18.21'
-  return `opencode/${version} (${process.platform} ${process.arch}; node${process.versions.node})`
+  // Mirrors opencodeUserAgent() in ids.ts (kept duplicated here to avoid a
+  // circular import: ids.ts imports KILO_USER_AGENT from this module).
+  const version = process.env.OPENCODE2DSH_VERSION?.trim() || '2.0.29'
+  return `opencode/latest/${version}/cli`
 }
 
 async function fetchWithTimeout(

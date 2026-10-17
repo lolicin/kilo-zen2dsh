@@ -65,6 +65,14 @@ export interface KiloAdapterOptions {
   /** Gateway output ceiling; null disables the Kilo compatibility cap. */
   maxOutputTokens?: number | null
   /**
+   * Provider-specific request payload rewriter, run after pi-ai builds the
+   * OpenAI params and before the request is sent. Return a modified object to
+   * replace the payload (mutating in place also works). The adapter's own
+   * max-tokens clamp runs afterwards, so a provider hook can change `stream`,
+   * `tools`, reasoning fields, etc. without worrying about token clamping.
+   */
+  onPayload?: (payload: Record<string, unknown>, model: KiloModel) => Record<string, unknown> | void
+  /**
    * Durable attachment service; enables image input for vision models. Pass a
    * function to resolve it lazily per request (the service registers after
    * this plugin boots), or a plain object to bind it for the adapter's life.
@@ -390,7 +398,14 @@ export class KiloAdapter {
       temperature: options.temperature,
       maxTokens: clampMaxTokens(options.maxTokens, info.maxTokens),
       reasoning: thinkingLevel(options.reasoningEffort),
-      onPayload: (payload) => clampPayloadMaxTokens(payload, info.maxTokens),
+      onPayload: (payload) => {
+        // Run the provider-specific rewriter first (Zen injects the gate `read`
+        // tool, forces streaming, normalises reasoning fields); the adapter's
+        // own max-tokens clamp then bounds whatever output budget that left.
+        const rewritten = this.#options.onPayload?.(payload as Record<string, unknown>, detail)
+        const effective = (rewritten ?? payload) as Record<string, unknown>
+        return clampPayloadMaxTokens(effective, info.maxTokens)
+      },
     })
     yield* toStreamChunks(events as unknown as AsyncIterable<PiEvent>, model.contextWindow)
   }
